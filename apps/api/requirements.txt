@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sse-starlette
+httpx
+requests
+pydantic
+redis
+langchain
+langchain-community
+langchain-openai
+sqlalchemy
+psycopg2-binary
+sentence-transformers
+faiss-cpu
+openai
+ujson

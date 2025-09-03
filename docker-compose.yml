@@ -1,0 +1,61 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports: ["8000:8000"]
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - CHAT_MODEL=${CHAT_MODEL}
+      - EMBED_MODEL=${EMBED_MODEL}
+      - FAISS_DIR=/app/data/copilot/faiss
+      - RAG_TOP_K=${RAG_TOP_K:-5}
+      - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-64}
+      - TOOLS_BASE_URL=http://tools-api:8010
+      - DB_URL=${DB_URL}
+      - ADMIN_PIN=${ADMIN_PIN}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - APP_ENV=${APP_ENV:-local}
+    volumes:
+      - ./data:/app/data
+    depends_on: [db, tools-api, redis]
+
+  tools-api:
+    build:
+      context: .
+      dockerfile: apps/tools_api/Dockerfile
+    ports: ["8010:8010"]
+    volumes: [ "./data:/app/data" ]
+
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - API_BASE_URL=http://api:8000
+      - REDIS_URL=redis://redis:6379/0
+    depends_on: [api, redis]
+
+  db:
+    image: postgres:alpine
+    environment:
+      - POSTGRES_DB=support
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/1_init.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/2_seed.sql:ro
+      - db_data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:alpine
+    ports: ["6379:6379"]
+
+volumes:
+  db_data:

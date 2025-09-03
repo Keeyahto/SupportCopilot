@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, :root {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900;
+}
+
+.card {
+  @apply rounded-2xl shadow-sm p-4 bg-white;
+}
+
+.badge {
+  @apply rounded-full px-2 py-0.5 text-xs font-medium inline-flex items-center gap-1;
+}
+
+.badge-slate { @apply bg-slate-100 text-slate-700; }
+.badge-indigo { @apply bg-indigo-100 text-indigo-700; }
+.badge-emerald { @apply bg-emerald-100 text-emerald-700; }
+.badge-rose { @apply bg-rose-100 text-rose-700; }
+
+mark {
+  @apply bg-yellow-200 rounded px-0.5;
+}
+
