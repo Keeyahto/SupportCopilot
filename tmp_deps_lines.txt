@@ -1,0 +1,130 @@
+   1: import os
+   2: import time
+   3: import logging
+   4: from pathlib import Path
+   5: from typing import Optional, List
+   6: 
+   7: from openai import OpenAI
+   8: from redis import Redis
+   9: from sentence_transformers import SentenceTransformer
+  10: from langchain_community.vectorstores import FAISS
+  11: 
+  12: from kits.kit_common import normalize_text
+  13: from kits.kit_chunker import split_markdown, split_text
+  14: 
+  15: 
+  16: logger = logging.getLogger(__name__)
+  17: 
+  18: 
+  19: class STEmbedding:
+  20:     def __init__(self, model: str):
+  21:         self.m = SentenceTransformer(model)
+  22: 
+  23:     def embed_documents(self, texts: List[str]):
+  24:         return self.m.encode(texts, normalize_embeddings=True).tolist()
+  25: 
+  26:     def embed_query(self, text: str):
+  27:         return self.m.encode([text], normalize_embeddings=True)[0].tolist()
+  28: 
+  29:     # Some vectorstore constructors (older/newer variants) expect a callable
+  30:     # instead of an Embeddings interface. Make the instance callable and
+  31:     # delegate to embed_query to be compatible with both forms.
+  32:     def __call__(self, text: str):
+  33:         return self.embed_query(text)
+  34: 
+  35: 
+  36: class AppState:
+  37:     client: Optional[OpenAI] = None
+  38:     redis: Optional[Redis] = None
+  39:     faiss: Optional[FAISS] = None
+  40:     embedder: Optional[STEmbedding] = None
+  41:     faiss_ready: bool = False
+  42:     metrics: dict = {
+  43:         "tool_calls": 0,
+  44:         "db_queries": 0,
+  45:         "rag_queries": 0,
+  46:         "deflection_rate": 0.0,
+  47:         "avg_confidence": 0.0,
+  48:     }
+  49: 
+  50: 
+  51: state = AppState()
+  52: 
+  53: 
+  54: def init_clients():
+  55:     # LLM client
+  56:     state.client = OpenAI(
+  57:         api_key=os.getenv("OPENAI_API_KEY"),
+  58:         base_url=os.getenv("OPENAI_BASE_URL"),
+  59:     )
+  60:     # Redis
+  61:     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+  62:     state.redis = Redis.from_url(redis_url, decode_responses=True)
+  63: 
+  64:     # Embeddings + FAISS
+  65:     embed_model = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+  66:     state.embedder = STEmbedding(embed_model)
+  67: 
+  68:     _ensure_faiss_index()
+  69: 
+  70: 
+  71: def _ensure_faiss_index():
+  72:     # Для локальной разработки используем относительные пути
+  73:     rel_faiss = Path("data/copilot/faiss").resolve()
+  74:     rel_faq = Path("data/copilot/faq").resolve()
+  75:     abs_faiss = Path("/app/data/copilot/faiss")
+  76:     abs_faq = Path("/app/data/copilot/faq")
+  77:     faiss_dir_env = os.getenv("FAISS_DIR")
+  78:     if faiss_dir_env:
+  79:         faiss_dir = Path(faiss_dir_env)
+  80:         faq_dir = rel_faq if rel_faq.exists() else abs_faq
+  81:     else:
+  82:         if abs_faq.exists() or abs_faiss.exists():
+  83:             faiss_dir = abs_faiss
+  84:             faq_dir = abs_faq
+  85:         else:
+  86:             faiss_dir = rel_faiss
+  87:             faq_dir = rel_faq
+  88:     Path(faiss_dir).mkdir(parents=True, exist_ok=True)
+  89: 
+  90:     try:
+  91:         force_rebuild = os.getenv("FAISS_FORCE_REBUILD", "false").lower() == "true"
+  92:         if (not force_rebuild) and any(Path(faiss_dir).iterdir()):
+  93:             state.faiss = FAISS.load_local(faiss_dir, state.embedder, allow_dangerous_deserialization=True)
+  94:             state.faiss_ready = True
+  95:             logger.info("FAISS index loaded from %s", faiss_dir)
+  96:             return
+  97:     except Exception as e:
+  98:         logger.warning("FAISS load failed, will rebuild: %s", e)
+  99: 
+ 100:     # Build index from scratch
+ 101:     texts = []
+ 102:     metadatas = []
+ 103:     max_tokens = int(os.getenv("CHUNK_MAX_TOKENS", "512"))
+ 104:     overlap = int(os.getenv("CHUNK_OVERLAP", "64"))
+ 105: 
+ 106:     if faq_dir.exists():
+ 107:         for p in faq_dir.rglob("*"):
+ 108:             if not p.is_file():
+ 109:                 continue
+ 110:             if p.suffix.lower() in {".md", ".txt"}:
+ 111:                 raw = p.read_text(encoding="utf-8", errors="ignore")
+ 112:                 clean = normalize_text(raw)
+ 113:                 chunks = split_markdown(clean, max_tokens, overlap) if p.suffix.lower() == ".md" else split_text(clean, max_tokens, overlap)
+ 114:                 for ch in chunks:
+ 115:                     texts.append(ch)
+ 116:                     metadatas.append({"filename": p.name, "path": str(p)})
+ 117:             # PDF support omitted for MVP; can be added with pypdf
+ 118: 
+ 119:     if not texts:
+ 120:         # ensure non-empty index
+ 121:         texts = ["Добро пожаловать в базу знаний Support Copilot."]
+ 122:         metadatas = [{"filename": "welcome.txt", "path": str(faq_dir / "welcome.txt")}]
+ 123: 
+ 124:     logger.info("Building FAISS index with %d chunks", len(texts))
+ 125:     t0 = time.time()
+ 126:     vs = FAISS.from_texts(texts=texts, embedding=state.embedder, metadatas=metadatas)
+ 127:     vs.save_local(faiss_dir)
+ 128:     state.faiss = vs
+ 129:     state.faiss_ready = True
+ 130:     logger.info("FAISS built in %.2fs", time.time() - t0)

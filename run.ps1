@@ -1,21 +1,21 @@
-# PowerShell скрипт для запуска SupportCopilot
+# PowerShell стартовый скрипт для запуска компонентов SupportCopilot
 
-Write-Host "🚀 Запуск SupportCopilot..." -ForegroundColor Green
+Write-Host "Запускаю SupportCopilot..." -ForegroundColor Green
 
-# Проверяем, что мы в корневой директории проекта
+# Проверка, что запуск из корня репозитория
 if (-not (Test-Path "apps")) {
-    Write-Host "❌ Ошибка: запустите скрипт из корневой директории проекта" -ForegroundColor Red
+    Write-Host "Ошибка: похоже, вы не в корне репозитория" -ForegroundColor Red
     exit 1
 }
 
-# Проверяем виртуальное окружение
+# Проверка активированного виртуального окружения
 if (-not $env:VIRTUAL_ENV) {
-    Write-Host "❌ Ошибка: активируйте виртуальное окружение" -ForegroundColor Red
-    Write-Host "Выполните: .\venv\Scripts\Activate.ps1" -ForegroundColor Yellow
+    Write-Host "Ошибка: активируйте виртуальное окружение" -ForegroundColor Red
+    Write-Host "Пример: .\venv\Scripts\Activate.ps1" -ForegroundColor Yellow
     exit 1
 }
 
-# Функция для запуска сервиса
+# Утилита для запуска фоновых процессов
 function Start-Service {
     param(
         [string]$Name,
@@ -23,7 +23,7 @@ function Start-Service {
         [string]$WorkingDirectory
     )
     
-    Write-Host "Запуск $Name..." -ForegroundColor Cyan
+    Write-Host "Стартую $Name..." -ForegroundColor Cyan
     
     try {
         if ($WorkingDirectory) {
@@ -44,7 +44,7 @@ function Start-Service {
 $processes = @()
 
 try {
-    # Запуск API сервера
+    # API сервер
     $apiProcess = Start-Service -Name "API Server" -Command "uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -WorkingDirectory "apps\api"
     if ($apiProcess) {
         $processes += @{Name="API Server"; Process=$apiProcess}
@@ -52,38 +52,29 @@ try {
     
     Start-Sleep -Seconds 2
     
-    # Запуск Tools API
-    $toolsProcess = Start-Service -Name "Tools API" -Command "uvicorn main:app --host 0.0.0.0 --port 8001 --reload" -WorkingDirectory "apps\tools_api"
-    if ($toolsProcess) {
-        $processes += @{Name="Tools API"; Process=$toolsProcess}
-    }
-    
-    Start-Sleep -Seconds 2
-    
-    # Запуск Telegram бота
+    # Telegram бот
     $botProcess = Start-Service -Name "Telegram Bot" -Command "python main.py" -WorkingDirectory "apps\bot"
     if ($botProcess) {
         $processes += @{Name="Telegram Bot"; Process=$botProcess}
     }
     
-    Write-Host "`n✅ Все сервисы запущены!" -ForegroundColor Green
-    Write-Host "`n🌐 API Server: http://localhost:8000" -ForegroundColor Yellow
-    Write-Host "🔧 Tools API: http://localhost:8001" -ForegroundColor Yellow
-    Write-Host "🤖 Telegram Bot: активен" -ForegroundColor Yellow
-    Write-Host "`nДля остановки нажмите Ctrl+C" -ForegroundColor Cyan
+    Write-Host "`nГотово: все процессы запущены!" -ForegroundColor Green
+    Write-Host "`n→ API Server: http://localhost:8000" -ForegroundColor Yellow
+    Write-Host "→ Telegram Bot: включен" -ForegroundColor Yellow
+    Write-Host "`nДля остановки используйте Ctrl+C" -ForegroundColor Cyan
     
-    # Ждем сигнала остановки
+    # Держим процесс живым
     while ($true) {
         Start-Sleep -Seconds 1
     }
     
 }
 catch {
-    Write-Host "`n🛑 Остановка сервисов..." -ForegroundColor Yellow
+    Write-Host "`nШтатная остановка сервисов..." -ForegroundColor Yellow
     
     foreach ($service in $processes) {
         try {
-            Write-Host "Остановка $($service.Name)..." -ForegroundColor Cyan
+            Write-Host "Останавливаю $($service.Name)..." -ForegroundColor Cyan
             Stop-Process -Id $service.Process.Id -Force
             Write-Host "$($service.Name) остановлен" -ForegroundColor Green
         }
@@ -92,6 +83,7 @@ catch {
         }
     }
     
-    Write-Host "✅ Все сервисы остановлены" -ForegroundColor Green
+    Write-Host "Готово: сервисы остановлены" -ForegroundColor Green
     exit 0
 }
+

@@ -2,6 +2,7 @@ import os
 from typing import List, Tuple
 
 from .deps import state
+from pathlib import Path
 from kits.kit_common.highlight import make_snippet
 
 
@@ -11,6 +12,14 @@ def retrieve(query: str, top_k: int | None = None):
     sources = []
     for i, (doc, score) in enumerate(docs):
         snippet, hl = make_snippet(doc.page_content, query)
+        # Try to read full document text from metadata.path
+        fulltext = None
+        p = doc.metadata.get("path")
+        try:
+            if p:
+                fulltext = Path(p).read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            fulltext = None
         sources.append({
             "id": f"d{i}",
             "score": score_to_similarity(score),
@@ -18,6 +27,8 @@ def retrieve(query: str, top_k: int | None = None):
             "page": doc.metadata.get("page", 1) or 1,
             "snippet": snippet,
             "highlights": hl,
+            "content": fulltext or snippet,
+            "path": p or "",
         })
     return sources
 
@@ -34,4 +45,3 @@ def compute_confidence(sources: List[dict]) -> float:
         return 0.0
     vals = [float(s.get("score", 0.0)) for s in sources]
     return sum(vals) / max(1, len(vals))
-

@@ -1,0 +1,91 @@
+   1: "use client";
+   2: import React, { useState } from "react";
+   3: import type { Label, ToolInfo, Source } from "../lib/types";
+   4: import ToolBadge from "./ToolBadge";
+   5: import DbSummary from "./DbSummary";
+   6: import SourceCard from "./SourceCard";
+   7: 
+   8: export default function MessageItem({
+   9:   role,
+  10:   text,
+  11:   labels,
+  12:   sources,
+  13:   tool_info,
+  14:   thinking,
+  15: }: {
+  16:   role: "user" | "assistant";
+  17:   text: string;
+  18:   labels?: Label[];
+  19:   sources?: Source[];
+  20:   tool_info?: ToolInfo;
+  21:   thinking?: string;
+  22: }) {
+  23:   const [showThink, setShowThink] = useState(false);
+  24:   
+  25:   // Проверяем, есть ли размышления для отображения
+  26:   const hasThinking = thinking && thinking.trim().length > 0;
+  27:   
+  28:   return (
+  29:     <div className={`card ${role === "assistant" ? "bg-white" : "bg-neutral-50"}`}>
+  30:       {role === "assistant" && (labels?.length || tool_info) && (
+  31:         <div className="mb-2 flex items-center gap-2 flex-wrap">
+  32:           {labels?.map((l) => (
+  33:             <ToolBadge key={l} label={l} />
+  34:           ))}
+  35:           {tool_info && (
+  36:             <ToolBadge label={
+  37:               tool_info.name === "db_analytics.query"
+  38:                 ? "DB Tool"
+  39:                 : tool_info.name === "orders.status"
+  40:                 ? "Order Status"
+  41:                 : "Tool-call"
+  42:             } />
+  43:           )}
+  44:         </div>
+  45:       )}
+  46:       
+  47:       {/* Панель размышлений - только одна копия */}
+  48:       {role === "assistant" && hasThinking && (
+  49:         <div className="mt-2">
+  50:           <button
+  51:             className="w-full text-left text-xs px-3 py-2 bg-neutral-100 rounded-lg text-neutral-700 hover:bg-neutral-200 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
+  52:             onClick={() => setShowThink((v) => !v)}
+  53:             aria-expanded={showThink}
+  54:             aria-label={showThink ? "Скрыть размышления модели" : "Показать размышления модели"}
+  55:           >
+  56:             <span className="flex items-center gap-2">
+  57:               <span className="text-indigo-600">💭</span>
+  58:               {showThink ? "Скрыть размышления" : "Показать размышления"}
+  59:             </span>
+  60:           </button>
+  61:           {showThink && (
+  62:             <div className="mt-2 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+  63:               <div className="text-xs font-medium text-neutral-600 mb-2">Размышления модели:</div>
+  64:               <pre className="text-xs font-mono whitespace-pre-wrap text-neutral-700 max-h-48 overflow-y-auto">
+  65:                 {thinking}
+  66:               </pre>
+  67:             </div>
+  68:           )}
+  69:         </div>
+  70:       )}
+  71:       
+  72:       <div className="whitespace-pre-wrap leading-relaxed text-neutral-900">
+  73:         {text ? text.replace(/<\/?think>/gi, "") : ""}
+  74:       </div>
+  75:       
+  76:       {tool_info && <DbSummary tool={tool_info} />}
+  77:       
+  78:       {role === "assistant" && sources && sources.length > 0 && (
+  79:         <div className="mt-3">
+  80:           <div className="text-sm font-semibold mb-1">Sources</div>
+  81:           <div className="grid md:grid-cols-2 gap-2">
+  82:             {sources.map((s) => (
+  83:               <SourceCard key={s.id} source={s} />
+  84:             ))}
+  85:           </div>
+  86:         </div>
+  87:       )}
+  88:     </div>
+  89:   );
+  90: }
+  91: 

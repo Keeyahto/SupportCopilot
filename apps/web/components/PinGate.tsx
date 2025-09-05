@@ -13,8 +13,8 @@ export default function PinGate({ open, onClose }: { open: boolean; onClose: () 
     setLoading(true);
     try {
       // Простая проверка PIN - в реальном приложении здесь должна быть проверка на сервере
-      // Пока используем хардкод для демо
-      if (pin === "1234") {
+      // Пока используем хардкод для демо (соответствует ADMIN_PIN на сервере)
+      if (pin === "123456") {
         setAdmin(pin);
         setMode("admin");
         onClose();

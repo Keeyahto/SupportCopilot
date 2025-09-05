@@ -14,7 +14,6 @@ services:
       - RAG_TOP_K=${RAG_TOP_K:-5}
       - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}
       - CHUNK_OVERLAP=${CHUNK_OVERLAP:-64}
-      - TOOLS_BASE_URL=http://tools-api:8010
       - DB_URL=${DB_URL}
       - ADMIN_PIN=${ADMIN_PIN}
       - REDIS_URL=redis://redis:6379/0
@@ -22,14 +21,8 @@ services:
       - APP_ENV=${APP_ENV:-local}
     volumes:
       - ./data:/app/data
-    depends_on: [db, tools-api, redis]
+    depends_on: [db, redis]
 
-  tools-api:
-    build:
-      context: .
-      dockerfile: apps/tools_api/Dockerfile
-    ports: ["8010:8010"]
-    volumes: [ "./data:/app/data" ]
 
   bot:
     build:

@@ -1,4 +1,0 @@
-[
-  {"order_no":"A1001","status":"delivered","customer":"alice@example.com","total":129.99},
-  {"order_no":"A1002","status":"processing","customer":"bob@example.com","total":79.50}
-]

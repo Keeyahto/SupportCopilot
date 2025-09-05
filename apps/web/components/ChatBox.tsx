@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useUiStore } from "../lib/store";
 import { postChat, postChatStream } from "../lib/api";
 import { splitThinking } from "../lib/think";
@@ -9,11 +9,16 @@ export default function ChatBox({ sessionId }: { sessionId?: string }) {
   const { mode, strict, lang, isAdmin, adminKey, pushMessage, updateLastAssistant, resetDialog } = useUiStore();
   const [text, setText] = useState("");
   const [isStreaming, setStreaming] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "waiting" | "streaming">("idle");
+  const [tokens, setTokens] = useState(0)
+  const lastTokenRef = useRef<string | null>(null);
 
   const disabled = !text.trim() || (mode === "admin" && !isAdmin);
 
   const doStream = async () => {
     setStreaming(true);
+    setPhase("waiting");
+    setTokens(0);
     const userId = crypto.randomUUID();
     pushMessage({ id: userId, role: "user", text, ts: Date.now() });
     const asstId = crypto.randomUUID();
@@ -26,15 +31,27 @@ export default function ChatBox({ sessionId }: { sessionId?: string }) {
         { text, mode, strict, lang },
         {
           onContext: (ctx: SSEContextData) => {
+            setPhase("streaming");
             updateLastAssistant({ sources: ctx.sources, labels: ctx.labels, tool_info: ctx.tool_info });
           },
           onToken: (t: string) => {
-            acc += t;
+            if (lastTokenRef.current === t) { return; }
+                        lastTokenRef.current = t;
+                                    acc += t;
+            setTokens((n) => n + 1);
             const { thinking, answer } = splitThinking(acc);
-            updateLastAssistant({ text: answer, thinking });
+            // Проверяем, не содержит ли токен thinking блок с полным ответом
+            if (t.includes('<think>') && t.includes('</think>')) {
+              // Если токен содержит полный thinking блок, используем только его
+              const { thinking: newThinking, answer: newAnswer } = splitThinking(t);
+              updateLastAssistant({ text: newAnswer, thinking: newThinking });
+            } else {
+              updateLastAssistant({ text: answer, thinking });
+            }
           },
           onDone: (_d: SSEDoneData) => {
             setStreaming(false);
+            setPhase("idle");
           },
           onError: (e: SSEErrorData) => {
             setStreaming(false);
@@ -74,11 +91,28 @@ export default function ChatBox({ sessionId }: { sessionId?: string }) {
 
   return (
     <div className="mt-3">
+      {phase !== "idle" && (
+        <div className="mb-2">
+          <div className={`h-2 rounded-full overflow-hidden ${phase === "waiting" ? "bg-indigo-100" : "bg-emerald-100"}`}>
+            <div className={`h-2 w-1/3 animate-pulse ${phase === "waiting" ? "bg-indigo-400" : "bg-emerald-400"}`}></div>
+          </div>
+          <div className="mt-1 text-xs text-neutral-500 flex items-center justify-between">
+            <span>{phase === "waiting" ? "Подготовка контекста..." : "Генерация ответа..."}</span>
+            {phase === "streaming" && <span>токенов: {tokens}</span>}
+          </div>
+        </div>
+      )}
       <textarea
         className="w-full border rounded-xl p-3 resize-y min-h-[80px]"
         placeholder="Спросите… (например: Где мой заказ #A1001?)"
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (!disabled && !isStreaming) doStream();
+          }
+        }}
       />
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -113,4 +147,3 @@ export default function ChatBox({ sessionId }: { sessionId?: string }) {
     </div>
   );
 }
-

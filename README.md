@@ -9,7 +9,7 @@ SupportCopilot/
 ├── apps/
 │   ├── api/           # Основное API приложение
 │   ├── bot/           # Telegram бот
-│   └── tools_api/     # API для инструментов
+│   └── web/           # Веб UI (Next.js)
 ├── data/              # Данные и конфигурация
 ├── db/                # Скрипты базы данных
 ├── kits/              # Общие компоненты
@@ -84,8 +84,7 @@ python main.py
 ### Запуск Tools API
 
 ```bash
-cd apps/tools_api
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+Tools API удалён: логика инструментов теперь работает через реальную БД внутри основного API
 ```
 
 ### Запуск через Docker

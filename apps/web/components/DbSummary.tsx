@@ -4,10 +4,11 @@ import type { ToolInfo } from "../lib/types";
 
 export default function DbSummary({ tool }: { tool: ToolInfo }) {
   const [openSql, setOpenSql] = useState(false);
+  const title = tool.name === "db_analytics.query" ? "DB Tool" : tool.name === "orders.status" ? "Order Status" : "Tool Result";
 
   return (
     <div className="card mt-2">
-      <div className="font-semibold mb-2">DB Tool</div>
+      <div className="font-semibold mb-2">{title}</div>
       {tool.summary && (
         <div className="mb-2 text-sm text-neutral-800">{tool.summary}</div>
       )}
@@ -44,12 +45,14 @@ export default function DbSummary({ tool }: { tool: ToolInfo }) {
             </tbody>
           </table>
           {tool.rows.length > 20 && (
-            <div className="text-[11px] text-neutral-500 mt-1">…и ещё {tool.rows.length - 20} строк</div>
+            <div className="text-[11px] text-neutral-500 mt-1">и ещё {tool.rows.length - 20} строк</div>
           )}
         </div>
       )}
 
-      <div className="text-[11px] text-neutral-500 mt-2">Данные из read-only БД (демо)</div>
+      {tool.name === "db_analytics.query" && (
+        <div className="text-[11px] text-neutral-500 mt-2">Данные из read-only БД (демо)</div>
+      )}
     </div>
   );
 }

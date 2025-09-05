@@ -21,9 +21,16 @@ export default function MessageItem({
   thinking?: string;
 }) {
   const [showThink, setShowThink] = useState(false);
+  const [showSources, setShowSources] = useState(false);
   
   // Проверяем, есть ли размышления для отображения
   const hasThinking = thinking && thinking.trim().length > 0;
+  const referencedIds = new Set(
+    (text || "").match(/\[d\d+\]/g)?.map((m) => m.replace(/\[|\]/g, "")) || []
+  );
+  const filteredSources = (sources || []).filter((s) =>
+    referencedIds.size === 0 ? false : referencedIds.has(s.id)
+  );
   
   return (
     <div className={`card ${role === "assistant" ? "bg-white" : "bg-neutral-50"}`}>
@@ -32,7 +39,15 @@ export default function MessageItem({
           {labels?.map((l) => (
             <ToolBadge key={l} label={l} />
           ))}
-          {tool_info?.name === "db_analytics.query" && <ToolBadge label="DB Tool" />}
+          {tool_info && !(labels || []).includes("DB Tool") && !(labels || []).includes("Tool-call") && (
+            <ToolBadge label={
+              tool_info.name === "db_analytics.query"
+                ? "DB Tool"
+                : tool_info.name === "orders.status"
+                ? "Order Status"
+                : "Tool-call"
+            } />
+          )}
         </div>
       )}
       
@@ -61,18 +76,28 @@ export default function MessageItem({
         </div>
       )}
       
-      <div className="whitespace-pre-wrap leading-relaxed text-neutral-900">{text || ""}</div>
+      <div className="whitespace-pre-wrap leading-relaxed text-neutral-900">
+        {text ? text.replace(/<\/?think>/gi, "") : ""}
+      </div>
       
-      {tool_info?.name === "db_analytics.query" && <DbSummary tool={tool_info} />}
+      {tool_info && <DbSummary tool={tool_info} />}
       
-      {role === "assistant" && sources && sources.length > 0 && (
+      {role === "assistant" && filteredSources && filteredSources.length > 0 && (
         <div className="mt-3">
-          <div className="text-sm font-semibold mb-1">Sources</div>
-          <div className="grid md:grid-cols-2 gap-2">
-            {sources.map((s) => (
-              <SourceCard key={s.id} source={s} />
-            ))}
-          </div>
+          <button
+            className="text-sm text-neutral-600 underline"
+            onClick={() => setShowSources((v) => !v)}
+            aria-expanded={showSources}
+          >
+            {showSources ? "Скрыть источники" : `Показать источники (${filteredSources.length})`}
+          </button>
+          {showSources && (
+            <div className="mt-2 grid md:grid-cols-2 gap-2">
+              {filteredSources.map((s) => (
+                <SourceCard key={s.id} source={s} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

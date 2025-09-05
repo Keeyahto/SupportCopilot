@@ -1,7 +1,6 @@
 "use client";
 import React, { useState } from "react";
 import { useUiStore } from "../lib/store";
-import ModeSwitch from "./ModeSwitch";
 import PinGate from "./PinGate";
 
 export default function Header() {
@@ -21,7 +20,7 @@ export default function Header() {
         </nav>
       </div>
       <div className="flex items-center gap-3">
-        <ModeSwitch onRequireAdmin={() => setPinOpen(true)} />
+        {/* Mode switch removed: agent auto-routes; keep Admin PIN */}
         <label className="flex items-center gap-1 text-sm">
           <input type="checkbox" checked={!!strict} onChange={(e) => setStrict(e.target.checked)} />
           Strict
@@ -35,4 +34,3 @@ export default function Header() {
     </header>
   );
 }
-

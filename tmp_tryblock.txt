@@ -1,6 +1,7 @@
+
 import os
 import json
-from typing import AsyncGenerator, Optional, List, Dict, Any
+from typing import AsyncGenerator, Optional, List
 
 from openai import OpenAI
 from sse_starlette.sse import EventSourceResponse
@@ -27,16 +28,8 @@ def build_user_prompt(question: str, context_sources: list[dict], tool_block: Op
     ctx_block = "\n".join(ctx)
     tb = ""
     if tool_block:
-        tb = f"\n\nИнструменты: {json.dumps(tool_block, ensure_ascii=False, default=str)}"
+        tb = f"\n\nИнструменты: {json.dumps(tool_block, ensure_ascii=False)}"
     return f"Вопрос: {question}\n\nКонтекст:\n---\n{ctx_block}\n---{tb}"
-
-
-def _public_tool_info(tool_info: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not tool_info:
-        return None
-    name = tool_info.get("name")
-    sql = tool_info.get("sql")
-    return {"name": name, "sql": sql}
 
 
 def _llm_enabled() -> bool:
@@ -64,17 +57,17 @@ async def llm_stream_answer(question: str, context_sources: list[dict], tool_inf
     context_event = {"event": "context", "data": json.dumps({
         "sources": context_sources,
         "labels": labels or [],
-        "tool_info": _public_tool_info(tool_info) or {},
-    }, ensure_ascii=False, default=str)}
+        "tool_info": tool_info or {},
+    }, ensure_ascii=False)}
     yield context_event
 
     if not _llm_enabled():
         # Fallback: emit a short stub answer token-by-token
         stub = "Режим офлайн: LLM недоступен."
         for ch in stub:
-            token_event = {"event": "token", "data": json.dumps({"t": ch}, ensure_ascii=False, default=str)}
+            token_event = {"event": "token", "data": json.dumps({"t": ch}, ensure_ascii=False)}
             yield token_event
-        done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False, default=str)}
+        done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False)}
         yield done_event
         return
 
@@ -87,9 +80,7 @@ async def llm_stream_answer(question: str, context_sources: list[dict], tool_inf
             ],
             temperature=0.2,
         ) as stream:
-            last_delta = None
-            for chunk in stream:
-                delta = None
+            for chunk in stream:\n            delta = None\n            last_delta = None
                 try:
                     if hasattr(chunk, 'choices') and chunk.choices:
                         delta = chunk.choices[0].delta.content
@@ -105,24 +96,8 @@ async def llm_stream_answer(question: str, context_sources: list[dict], tool_inf
                 except Exception:
                     delta = None
 
-                if delta and delta != last_delta:
-                    token_event = {"event": "token", "data": json.dumps({"t": delta}, ensure_ascii=False, default=str)}
+                if delta:
+                    token_event = {"event": "token", "data": json.dumps({"t": delta}, ensure_ascii=False)}
                     yield token_event
-                    last_delta = delta
-            done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False, default=str)}
+            done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False)}
             yield done_event
-    except Exception as e:
-        error_event = {"event": "error", "data": json.dumps({"message": str(e)}, default=str)}
-        yield error_event
-
-
-def sse_from_generator(gen: AsyncGenerator[dict, None]) -> EventSourceResponse:
-    async def event_gen():
-        try:
-            async for ev in gen:
-                yield ev
-        except Exception as e:
-            yield {"event": "error", "data": json.dumps({"message": str(e)}, default=str)}
-    return EventSourceResponse(event_gen())
-
-

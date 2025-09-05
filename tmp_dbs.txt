@@ -1,0 +1,56 @@
+   1: "use client";
+   2: import React, { useState } from "react";
+   3: import type { ToolInfo } from "../lib/types";
+   4: 
+   5: export default function DbSummary({ tool }: { tool: ToolInfo }) {
+   6:   const [openSql, setOpenSql] = useState(false);
+   7: 
+   8:   return (
+   9:     <div className="card mt-2">
+  10:       <div className="font-semibold mb-2">DB Tool</div>
+  11:       {tool.summary && (
+  12:         <div className="mb-2 text-sm text-neutral-800">{tool.summary}</div>
+  13:       )}
+  14: 
+  15:       {tool.sql && (
+  16:         <div className="mb-2">
+  17:           <button className="text-xs text-indigo-600 hover:underline" onClick={() => setOpenSql(!openSql)}>
+  18:             {openSql ? "Скрыть SQL" : "Показать SQL"}
+  19:           </button>
+  20:           {openSql && (
+  21:             <pre className="mt-1 text-xs bg-neutral-100 rounded p-2 overflow-x-auto"><code>{tool.sql}</code></pre>
+  22:           )}
+  23:         </div>
+  24:       )}
+  25: 
+  26:       {tool.rows && tool.rows.length > 0 && (
+  27:         <div className="overflow-x-auto">
+  28:           <table className="w-full text-xs border-collapse">
+  29:             <thead>
+  30:               <tr className="text-left text-neutral-600">
+  31:                 {Object.keys(tool.rows[0]).map((k) => (
+  32:                   <th key={k} className="border-b p-1 pr-3 font-medium">{k}</th>
+  33:                 ))}
+  34:               </tr>
+  35:             </thead>
+  36:             <tbody>
+  37:               {tool.rows.slice(0, 20).map((row, i) => (
+  38:                 <tr key={i} className="align-top">
+  39:                   {Object.keys(tool.rows![0]).map((k) => (
+  40:                     <td key={k} className="border-b p-1 pr-3 text-neutral-800">{String((row as any)[k])}</td>
+  41:                   ))}
+  42:                 </tr>
+  43:               ))}
+  44:             </tbody>
+  45:           </table>
+  46:           {tool.rows.length > 20 && (
+  47:             <div className="text-[11px] text-neutral-500 mt-1">…и ещё {tool.rows.length - 20} строк</div>
+  48:           )}
+  49:         </div>
+  50:       )}
+  51: 
+  52:       <div className="text-[11px] text-neutral-500 mt-2">Данные из read-only БД (демо)</div>
+  53:     </div>
+  54:   );
+  55: }
+  56: 

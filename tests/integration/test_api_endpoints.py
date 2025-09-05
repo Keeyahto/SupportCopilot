@@ -62,12 +62,7 @@ def setup_app(monkeypatch):
 
     # prevent real startup init
     monkeypatch.setattr(main, "init_clients", lambda: None)
-    
-    # Mock call_tools_api directly in main module
-    async def fake_call_tools_api(intent: str, clean_text: str) -> dict:
-        return {"name": "shipping.eta", "data": {"eta_days": 3}, "ok": True}
-    
-    monkeypatch.setattr(main, "call_tools_api", fake_call_tools_api)
+    # No external tools mocking: tools are DB-backed now
 
     deps.state.client = FakeOpenAI()
     deps.state.embedder = embed

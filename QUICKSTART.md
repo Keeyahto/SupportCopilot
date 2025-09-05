@@ -46,8 +46,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 **Tools API:**
 ```bash
-cd apps/tools_api
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+Tools API удалён: инструменты теперь работают через БД в API
 ```
 
 **Telegram Bot:**

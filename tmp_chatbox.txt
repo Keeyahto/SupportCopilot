@@ -1,0 +1,123 @@
+   1: "use client";
+   2: import React, { useState } from "react";
+   3: import { useUiStore } from "../lib/store";
+   4: import { postChat, postChatStream } from "../lib/api";
+   5: import { splitThinking } from "../lib/think";
+   6: import type { SSEContextData, SSEDoneData, SSEErrorData } from "../lib/types";
+   7: 
+   8: export default function ChatBox({ sessionId }: { sessionId?: string }) {
+   9:   const { mode, strict, lang, isAdmin, adminKey, pushMessage, updateLastAssistant, resetDialog } = useUiStore();
+  10:   const [text, setText] = useState("");
+  11:   const [isStreaming, setStreaming] = useState(false);
+  12: 
+  13:   const disabled = !text.trim() || (mode === "admin" && !isAdmin);
+  14: 
+  15:   const doStream = async () => {
+  16:     setStreaming(true);
+  17:     const userId = crypto.randomUUID();
+  18:     pushMessage({ id: userId, role: "user", text, ts: Date.now() });
+  19:     const asstId = crypto.randomUUID();
+  20:     pushMessage({ id: asstId, role: "assistant", text: "", ts: Date.now(), labels: [], sources: [] });
+  21:     setText("");
+  22:     let acc = "";
+  23: 
+  24:     try {
+  25:       await postChatStream(
+  26:         { text, mode, strict, lang },
+  27:         {
+  28:           onContext: (ctx: SSEContextData) => {
+  29:             updateLastAssistant({ sources: ctx.sources, labels: ctx.labels, tool_info: ctx.tool_info });
+  30:           },
+  31:           onToken: (t: string) => {
+  32:             acc += t;
+  33:             const { thinking, answer } = splitThinking(acc);
+  34:             // Проверяем, не содержит ли токен thinking блок с полным ответом
+  35:             if (t.includes('<think>') && t.includes('</think>')) {
+  36:               // Если токен содержит полный thinking блок, используем только его
+  37:               const { thinking: newThinking, answer: newAnswer } = splitThinking(t);
+  38:               updateLastAssistant({ text: newAnswer, thinking: newThinking });
+  39:             } else {
+  40:               updateLastAssistant({ text: answer, thinking });
+  41:             }
+  42:           },
+  43:           onDone: (_d: SSEDoneData) => {
+  44:             setStreaming(false);
+  45:           },
+  46:           onError: (e: SSEErrorData) => {
+  47:             setStreaming(false);
+  48:             alert(e.message || "Ошибка соединения");
+  49:           },
+  50:         },
+  51:         isAdmin ? adminKey : undefined,
+  52:         sessionId
+  53:       );
+  54:     } catch (e: any) {
+  55:       setStreaming(false);
+  56:       alert(e?.message || "Ошибка соединения");
+  57:     }
+  58:   };
+  59: 
+  60:   const doOnce = async () => {
+  61:     const userId = crypto.randomUUID();
+  62:     pushMessage({ id: userId, role: "user", text, ts: Date.now() });
+  63:     setText("");
+  64:     try {
+  65:       const res = await postChat({ text, mode, strict, lang }, isAdmin ? adminKey : undefined, sessionId);
+  66:       const { thinking, answer } = splitThinking(res.answer || "");
+  67:       pushMessage({
+  68:         id: crypto.randomUUID(),
+  69:         role: "assistant",
+  70:         text: answer,
+  71:         thinking,
+  72:         labels: res.labels,
+  73:         sources: res.sources,
+  74:         tool_info: res.tool_info,
+  75:         ts: Date.now(),
+  76:       });
+  77:     } catch (e: any) {
+  78:       alert(e?.message || "Ошибка соединения");
+  79:     }
+  80:   };
+  81: 
+  82:   return (
+  83:     <div className="mt-3">
+  84:       <textarea
+  85:         className="w-full border rounded-xl p-3 resize-y min-h-[80px]"
+  86:         placeholder="Спросите… (например: Где мой заказ #A1001?)"
+  87:         value={text}
+  88:         onChange={(e) => setText(e.target.value)}
+  89:       />
+  90:       <div className="mt-2 flex items-center justify-between gap-2">
+  91:         <div className="flex items-center gap-2">
+  92:           <button
+  93:             className="px-3 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+  94:             onClick={doStream}
+  95:             disabled={disabled || isStreaming}
+  96:           >
+  97:             Отправить (SSE)
+  98:           </button>
+  99:           <button
+ 100:             className="px-3 py-2 rounded-lg bg-neutral-200 text-neutral-900 disabled:opacity-50"
+ 101:             onClick={doOnce}
+ 102:             disabled={disabled || isStreaming}
+ 103:           >
+ 104:             Отправить (без стрима)
+ 105:           </button>
+ 106:         </div>
+ 107:         <div className="flex items-center gap-2">
+ 108:           <button
+ 109:             className="text-sm text-rose-600 hover:underline"
+ 110:             onClick={() => resetDialog()}
+ 111:             disabled={isStreaming}
+ 112:           >
+ 113:             Сбросить диалог
+ 114:           </button>
+ 115:         </div>
+ 116:       </div>
+ 117:       {mode === "admin" && !isAdmin && (
+ 118:         <div className="mt-1 text-xs text-rose-600">Требуется PIN для режима Admin</div>
+ 119:       )}
+ 120:     </div>
+ 121:   );
+ 122: }
+ 123: 

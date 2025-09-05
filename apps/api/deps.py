@@ -52,6 +52,16 @@ state = AppState()
 
 
 def init_clients():
+    # Load .env from repo root if present (best-effort)
+    try:
+        from dotenv import load_dotenv  # type: ignore
+        repo_root = Path(__file__).resolve().parents[2]
+        env_path = repo_root / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+            logger.info("Loaded .env from %s", env_path)
+    except Exception as e:
+        logger.debug("dotenv not loaded: %s", e)
     # LLM client
     state.client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY"),
@@ -70,20 +80,36 @@ def init_clients():
 
 def _ensure_faiss_index():
     # Для локальной разработки используем относительные пути
-    if os.getenv("TESTING") == "true":
-        faiss_dir = Path("data/copilot/faiss").resolve()
-        faq_dir = Path("data/copilot/faq").resolve()
+    repo_root = Path(__file__).resolve().parents[2]
+    rel_faiss = repo_root / "data/copilot/faiss"
+    rel_faq = repo_root / "data/copilot/faq"
+    abs_faiss = Path("/app/data/copilot/faiss")
+    abs_faq = Path("/app/data/copilot/faq")
+    faiss_dir_env = os.getenv("FAISS_DIR")
+    if faiss_dir_env:
+        # If env points to container path but we're local, fall back to repo-relative
+        if faiss_dir_env.startswith("/app/") and not abs_faq.exists():
+            faiss_dir = rel_faiss
+        else:
+            faiss_dir = Path(faiss_dir_env)
+        faq_dir = rel_faq if rel_faq.exists() else abs_faq
     else:
-        faiss_dir = os.getenv("FAISS_DIR", "/app/data/copilot/faiss")
-        faq_dir = Path("/app/data/copilot/faq")
-    
+        if abs_faq.exists() or abs_faiss.exists():
+            faiss_dir = abs_faiss
+            faq_dir = abs_faq
+        else:
+            faiss_dir = rel_faiss
+            faq_dir = rel_faq
     Path(faiss_dir).mkdir(parents=True, exist_ok=True)
+    logger.info("FAISS using faiss_dir=%s, faq_dir=%s", faiss_dir, faq_dir)
+    logger.info("FAISS using faiss_dir=%s, faq_dir=%s", faiss_dir, faq_dir)
 
     try:
-        if any(Path(faiss_dir).iterdir()):
+        force_rebuild = os.getenv("FAISS_FORCE_REBUILD", "false").lower() == "true"
+        if (not force_rebuild) and any(Path(faiss_dir).iterdir()):
             state.faiss = FAISS.load_local(faiss_dir, state.embedder, allow_dangerous_deserialization=True)
             state.faiss_ready = True
-            logger.info("FAISS index loaded from %s", faiss_dir)
+            logger.info("FAISS index loaded from %s (force_rebuild=%s)", faiss_dir, force_rebuild)
             return
     except Exception as e:
         logger.warning("FAISS load failed, will rebuild: %s", e)

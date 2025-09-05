@@ -1,0 +1,149 @@
+   1: import os
+   2: import json
+   3: from typing import AsyncGenerator, Optional, List
+   4: 
+   5: from openai import OpenAI
+   6: from sse_starlette.sse import EventSourceResponse
+   7: 
+   8: from .deps import state
+   9: 
+  10: 
+  11: def system_prompt(mode: str, strict: bool) -> str:
+  12:     base = (
+  13:         "Ты — ассистент поддержки. Отвечай кратко, дружелюбно, с цитатами источников. "
+  14:         "Если даются правила, не обещай возвраты вне правил."
+  15:     )
+  16:     if mode == "policies" or strict:
+  17:         base += " Отвечай только из контекста. Если данных недостаточно — предложи эскалацию."
+  18:     return base
+  19: 
+  20: 
+  21: def build_user_prompt(question: str, context_sources: list[dict], tool_block: Optional[dict] = None) -> str:
+  22:     ctx = []
+  23:     for s in context_sources[:5]:
+  24:         ctx.append(f"[{s['filename']}] {s['snippet']}")
+  25:     ctx_block = "\n".join(ctx)
+  26:     tb = ""
+  27:     if tool_block:
+  28:         tb = f"\n\nИнструмент: {json.dumps(tool_block, ensure_ascii=False)}"
+  29:     return f"Вопрос: {question}\n\nКонтекст:\n---\n{ctx_block}\n---{tb}"
+  30: 
+  31: 
+  32: def _llm_enabled() -> bool:
+  33:     return bool(state.client) and bool(os.getenv("OPENAI_API_KEY")) and bool(os.getenv("CHAT_MODEL"))
+  34: 
+  35: 
+  36: def llm_answer(question: str, context_sources: list[dict], tool_info: Optional[dict] = None) -> str:
+  37:     if not _llm_enabled():
+  38:         return "Демо-ответ (LLM отключён). Это локальный режим без доступа к OpenAI."
+  39:     client: OpenAI = state.client
+  40:     resp = client.chat.completions.create(
+  41:         model=os.getenv("CHAT_MODEL"),
+  42:         messages=[
+  43:             {"role": "system", "content": system_prompt("faq", False)},
+  44:             {"role": "user", "content": build_user_prompt(question, context_sources, tool_info)},
+  45:         ],
+  46:         temperature=0.2,
+  47:     )
+  48:     return resp.choices[0].message.content or ""
+  49: 
+  50: 
+  51: async def llm_stream_answer(question: str, context_sources: list[dict], tool_info: Optional[dict] = None, labels: Optional[List[str]] = None) -> AsyncGenerator[dict, None]:
+  52:     print(f"🚀 [LLM] Начинаем стрим для вопроса: {question[:50]}...")
+  53:     print(f"🚀 [LLM] Источники: {len(context_sources)}")
+  54:     print(f"🚀 [LLM] Tool info: {tool_info}")
+  55:     
+  56:     client: OpenAI = state.client
+  57:     # send context first
+  58:     context_event = {"event": "context", "data": json.dumps({
+  59:         "sources": context_sources,
+  60:         "labels": labels or [],
+  61:         "tool_info": tool_info or {},
+  62:     }, ensure_ascii=False)}
+  63:     print(f"📋 [LLM] Отправляем context event")
+  64:     yield context_event
+  65: 
+  66:     if not _llm_enabled():
+  67:         print("⚠️ [LLM] LLM отключен, отправляем fallback")
+  68:         # Fallback: emit a short stub answer token-by-token
+  69:         stub = "Демо-ответ (LLM отключён)."
+  70:         for ch in stub:
+  71:             token_event = {"event": "token", "data": json.dumps({"t": ch}, ensure_ascii=False)}
+  72:             print(f"🔤 [LLM] Отправляем fallback токен: '{ch}'")
+  73:             yield token_event
+  74:         done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False)}
+  75:         print(f"✅ [LLM] Отправляем done event")
+  76:         yield done_event
+  77:         return
+  78: 
+  79:     print(f"🤖 [LLM] LLM включен, вызываем OpenAI API")
+  80:     try:
+  81:         with client.chat.completions.stream(
+  82:             model=os.getenv("CHAT_MODEL"),
+  83:             messages=[
+  84:                 {"role": "system", "content": system_prompt("faq", False)},
+  85:                 {"role": "user", "content": build_user_prompt(question, context_sources, tool_info)},
+  86:             ],
+  87:             temperature=0.2,
+  88:         ) as stream:
+  89:             print(f"📡 [LLM] Начинаем стрим от OpenAI")
+  90:             token_count = 0
+  91:             last_delta = ""  # Для дедупликации
+  92:             
+  93:             for chunk in stream:
+  94:                 delta = None
+  95:                 try:
+  96:                     # LM Studio использует другую структуру чанков
+  97:                     if hasattr(chunk, 'choices') and chunk.choices:
+  98:                         # OpenAI формат
+  99:                         delta = chunk.choices[0].delta.content
+ 100:                     elif hasattr(chunk, 'content'):
+ 101:                         # LM Studio формат
+ 102:                         delta = chunk.content
+ 103:                     elif hasattr(chunk, 'delta') and hasattr(chunk.delta, 'content'):
+ 104:                         # Альтернативный формат
+ 105:                         delta = chunk.delta.content
+ 106:                     elif hasattr(chunk, 'type') and chunk.type == 'content.delta':
+ 107:                         # ContentDeltaEvent формат
+ 108:                         delta = getattr(chunk, 'delta', None)
+ 109:                     elif hasattr(chunk, 'type') and chunk.type == 'chunk':
+ 110:                         # ChunkEvent формат
+ 111:                         if hasattr(chunk, 'chunk') and hasattr(chunk.chunk, 'choices'):
+ 112:                             delta = chunk.chunk.choices[0].delta.content
+ 113:                     else:
+ 114:                         print(f"🔤 [LLM] Неизвестная структура чанка: {type(chunk)} - {chunk}")
+ 115:                         delta = None
+ 116:                 except Exception as e:
+ 117:                     print(f"⚠️ [LLM] Ошибка получения delta: {e}")
+ 118:                     delta = None
+ 119:                 
+ 120:                 if delta and delta != last_delta:  # Дедупликация
+ 121:                     token_event = {"event": "token", "data": json.dumps({"t": delta}, ensure_ascii=False)}
+ 122:                     print(f"🔤 [LLM] Отправляем токен {token_count}: '{delta}'")
+ 123:                     yield token_event
+ 124:                     token_count += 1
+ 125:                     last_delta = delta
+ 126:                 elif delta:
+ 127:                     print(f"🔤 [LLM] Пропускаем дублированный токен: '{delta}'")
+ 128:                 else:
+ 129:                     print(f"🔤 [LLM] Пустой delta в чанке типа: {type(chunk)}")
+ 130:             
+ 131:             print(f"✅ [LLM] Стрим завершен, отправлено токенов: {token_count}")
+ 132:             done_event = {"event": "done", "data": json.dumps({"finish_reason": "stop"}, ensure_ascii=False)}
+ 133:             print(f"✅ [LLM] Отправляем done event")
+ 134:             yield done_event
+ 135:     except Exception as e:
+ 136:         print(f"💥 [LLM] Ошибка в стриме: {e}")
+ 137:         error_event = {"event": "error", "data": json.dumps({"message": str(e)})}
+ 138:         print(f"❌ [LLM] Отправляем error event")
+ 139:         yield error_event
+ 140: 
+ 141: 
+ 142: def sse_from_generator(gen: AsyncGenerator[dict, None]) -> EventSourceResponse:
+ 143:     async def event_gen():
+ 144:         try:
+ 145:             async for ev in gen:
+ 146:                 yield ev
+ 147:         except Exception as e:
+ 148:             yield {"event": "error", "data": json.dumps({"message": str(e)})}
+ 149:     return EventSourceResponse(event_gen())
