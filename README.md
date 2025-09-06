@@ -1,6 +1,11 @@
-English version • Русская версия: README.ru.md
+# Support Copilot — AI Assistant for Customer Support (RAG + Tools + DB Analytics)
 
-Support Copilot — AI Assistant for Customer Support (RAG + Tools + DB Analytics)
+_Читать на русском: [README.ru.md](./README.ru.md)_
+
+
+
+https://github.com/user-attachments/assets/501e2634-e31e-4c93-ace4-75d471eb7211
+
 
 Note: this repository is a demonstration/reference project, not a finished product. It is published under the MIT License — see LICENSE.
 
