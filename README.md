@@ -1,113 +1,66 @@
-# SupportCopilot
+English version • Русская версия: README.ru.md
 
-Система поддержки клиентов с использованием AI для автоматизации ответов на часто задаваемые вопросы.
+Support Copilot — AI Assistant for Customer Support (RAG + Tools + DB Analytics)
 
-## Структура проекта
+Note: this repository is a demonstration/reference project, not a finished product. It is published under the MIT License — see LICENSE.
 
-```
-SupportCopilot/
-├── apps/
-│   ├── api/           # Основное API приложение
-│   ├── bot/           # Telegram бот
-│   └── web/           # Веб UI (Next.js)
-├── data/              # Данные и конфигурация
-├── db/                # Скрипты базы данных
-├── kits/              # Общие компоненты
-└── docker-compose.yml # Docker конфигурация
-```
+Support Copilot showcases how a support copilot can answer with cited sources from your knowledge base, call business tools (like order status), and provide admin analytics via natural‑language‑to‑SQL — all in a clean web UI and simple API.
 
-## Установка
+Watch the demo video attached to this repository to see the full flow.
 
-### 1. Создание виртуального окружения
+Key Outcomes
+- Faster responses: instant, confident answers for FAQs with transparent citations.
+- Fewer escalations: integrated tools resolve common L2 cases (orders, shipping, pricing).
+- Actionable analytics: managers ask questions in plain language and get live tables.
 
-```bash
-python -m venv venv
-```
+What It Does
+- Web chat with live streaming: answers appear token‑by‑token for a smooth experience.
+- RAG with citations: the assistant quotes relevant document fragments; each fact can include reference marks like [d0], [d1] with expandable source cards.
+- Tool calling for operations:
+  - Order status lookup by number (e.g., #A1009) from a read‑only database.
+  - Shipping, plans, and pricing sourced from policy/FAQ documents.
+- Admin mode (PIN‑protected):
+  - Dashboard: totals, orders by status, top products, recent orders.
+  - Orders list: filters, quick status update, and details modal.
+  - NL→SQL analytics: safe SELECT‑only queries, returned rows, plus the SQL used.
+- Metrics strip: live stats for tool calls, DB queries, RAG hits, and answer confidence.
+- Health page: quick environment and readiness check for the backend and index.
+- Telegram bot hook: can be connected for messenger support.
 
-### 2. Активация виртуального окружения
+Where It Fits (examples)
+- Support teams that need trustworthy, cited answers.
+- E‑commerce or services with order tracking and clear policies.
+- Operations and managers looking for quick insights without writing SQL.
 
-**Windows (PowerShell):**
-```bash
-.\venv\Scripts\Activate.ps1
-```
+How It Works (High Level)
+- Knowledge Base: Markdown/text documents are indexed for semantic retrieval.
+- AI Orchestration: The assistant decides when to use RAG, look up an order, or run an analytics query.
+- Streaming UI: Shows context (sources, labels, tool info) first, then the answer stream.
+- Safe Analytics: Read‑only queries with strong guards to prevent DML/DDL and automatic LIMIT.
 
-**Windows (Command Prompt):**
-```bash
-venv\Scripts\activate.bat
-```
+Suggested Demo Scenarios
+- Ask a policy question like “What is the refund window?” and review the cited sources.
+- Ask “Where is my order #A1009?” to trigger the order status tool.
+- Enable Admin mode (PIN: 123456) and ask “Sales last 7 days?” to see NL→SQL and a results table.
+- Explore the Dashboard and Orders tabs — the database is pre‑seeded for rich results.
 
-**Linux/Mac:**
-```bash
-source venv/bin/activate
-```
+Running the Demo (Brief)
+- Copy .env.example to .env and adjust keys/URLs if needed.
+- Start with Docker Compose: docker-compose up -d
+- Open Web UI (http://localhost:3000) and API (http://localhost:8000). Use Admin PIN 123456.
 
-### 3. Установка зависимостей
+Security & Privacy
+- Sensitive data (emails, cards, phones) is masked before processing.
+- Admin analytics is gated by a PIN; SQL is SELECT‑only and validated.
 
-```bash
-pip install -r requirements.txt
-```
+What’s Included
+- Web chat with citations and a sources panel.
+- Admin dashboard (stats, orders, top products, recent activity).
+- NL→SQL analytics with visible SQL.
+- Health endpoint and live metrics.
 
-### 4. Настройка переменных окружения
+Using This Demo
+- The project is open‑source under MIT. You can fork, adapt, and integrate it with your documents and systems. The demo video illustrates the end‑to‑end UX; use it as a starting point for your own setup.
 
-Создайте файл `.env` на основе `config.py` или установите переменные окружения:
-
-```bash
-# База данных
-export DATABASE_URL="postgresql://user:password@localhost:5432/supportcopilot"
-
-# Redis
-export REDIS_URL="redis://localhost:6379"
-
-# OpenAI
-export OPENAI_API_KEY="your_api_key_here"
-
-# Telegram Bot
-export BOT_TOKEN="your_bot_token_here"
-```
-
-## Запуск
-
-### Запуск API сервера
-
-```bash
-cd apps/api
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Запуск Telegram бота
-
-```bash
-cd apps/bot
-python main.py
-```
-
-### Запуск Tools API
-
-```bash
-Tools API удалён: логика инструментов теперь работает через реальную БД внутри основного API
-```
-
-### Запуск через Docker
-
-```bash
-docker-compose up -d
-```
-
-## Разработка
-
-### Установка зависимостей для разработки
-
-```bash
-pip install -r requirements.txt
-```
-
-### Структура кода
-
-- **API**: FastAPI приложение с эндпоинтами для обработки запросов
-- **Bot**: Telegram бот на aiogram для взаимодействия с пользователями
-- **Tools API**: API для загрузки и обработки документов
-- **Kits**: Общие компоненты для переиспользования
-
-## Лицензия
-
-MIT License
+License
+- MIT License. See LICENSE for details. No warranty; use at your own risk.
